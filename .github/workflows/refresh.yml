@@ -1,0 +1,59 @@
+name: refresh-ledger
+# Runs on GitHub's servers: no laptop, no Claude session, no approval clicks.
+# GitHub's scheduler often fires hours late, so there are several attempts each morning;
+# the first one that fires does the refresh and the rest see it is done and stop.
+# 10:17–14:47 UTC = 2:17–6:47am Pacific in winter (3:17–7:47 in summer) = before 8am Central, and
+# before the team's morning budget changes, so the pull records exactly how yesterday ended.
+# The afternoon slots are a catch-up in case every morning attempt was skipped.
+on:
+  schedule:
+    - cron: '17,47 10-14 * * *'
+    - cron: '17 17,20,23 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Already refreshed today?
+        id: due
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "run=yes" >> "$GITHUB_OUTPUT";
+          else echo "run=$(node scripts/vault.mjs due)" >> "$GITHUB_OUTPUT"; fi
+      - name: Decrypt stored history
+        if: steps.due.outputs.run == 'yes'
+        env:
+          LEDGER_PASSPHRASE: ${{ secrets.LEDGER_PASSPHRASE }}
+        run: node scripts/vault.mjs unpack
+      - name: Pull spend, budgets and on/off from Moby
+        if: steps.due.outputs.run == 'yes'
+        env:
+          MOBY_MCP_KEY: ${{ secrets.MOBY_MCP_KEY }}
+        run: node scripts/fetch_moby.mjs --project . || (sleep 60 && node scripts/fetch_moby.mjs --project .)
+      - name: Record how yesterday ended + rebuild the ledger
+        if: steps.due.outputs.run == 'yes'
+        run: node scripts/build_ledger.mjs --project . snapshot
+      - name: Encrypt
+        if: steps.due.outputs.run == 'yes'
+        env:
+          LEDGER_PASSPHRASE: ${{ secrets.LEDGER_PASSPHRASE }}
+        run: node scripts/vault.mjs pack
+      - name: Commit
+        if: steps.due.outputs.run == 'yes'
+        run: |
+          git config user.name "ledger-refresh-bot"
+          git config user.email "actions@github.com"
+          git add enc/
+          git diff --cached --quiet && echo "no changes" || git commit -m "Ledger refresh $(date -u +%F)"
+          git push

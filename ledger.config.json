@@ -1,0 +1,28 @@
+{
+  "brand": "Alpha Lion",
+  "timezone": "America/Los_Angeles",
+  "funnels": [
+    "B2O",
+    "SHT",
+    "DEL"
+  ],
+  "ledger_start": "2026-08-03",
+  "keep": {
+    "daily": 120,
+    "weekly": 26,
+    "monthly": 12,
+    "detail_days": 21
+  },
+  "page_title": "Alpha Lion Budget Ledger",
+  "channel": "meta",
+  "moby_key_file": "~/.config/moby/key",
+  "page_note": "B2O includes the Canada campaigns.",
+  "attribution_model": "full_impact",
+  "attribution_window": "7_day_click",
+  "nvp_window_days": 1,
+  "bofu_match": "BOFU",
+  "nvp_offset_days": 1,
+  "payload_days": 2,
+  "bofu_label": "BOFU / Offer Ads",
+  "bofu_label_rest": "Non BOFU / Offer Ads"
+}

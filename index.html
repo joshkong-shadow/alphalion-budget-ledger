@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Alpha Lion Budget Ledger</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@700&display=swap">
+<style>
+/* Layout: summary strip for the last full day, then one wide ledger whose period column stays
+   pinned. Same single dark look as the NVP Bucket Ledger so the two read as one family. */
+:root {
+  color-scheme: dark;
+  --bg: #15161a; --panel: #1c1d22; --raised: #34363f; --line: #2c2d34;
+  --fg: #f1efe9; --dim: #8f8d86; --soft: #c9c6bd;
+  --under: #e0a556; --over: #6fbfdd; --ok: #5fd08f; --warn-bg: #4a3a12; --warn-fg: #ffd98a;
+  --tot: #9a9689; --f1: #e07a5f; --f2: #6fbfdd; --f3: #5fbf8b; --f4: #d9c35a; --f5: #d98fb4; --f6: #8fa3e8; --OTH: #b79ad6; --b60: #5fbf8b; --b50: #6fbfdd; --b40: #e0a556; --b0: #e07070; --none: #8f8d86;
+  --band-ink: #10110f;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --cond: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); padding-inline: 20px; padding-block: 24px; }
+.wrap { max-width: 1760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+h1 { font-family: var(--cond); font-size: 28px; font-weight: 700; margin: 0; text-wrap: balance; }
+.sub { color: var(--dim); font-size: 13px; max-width: 90ch; }
+
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stat .k { font: 500 11px var(--mono); letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); }
+.stat .v { font: 700 30px var(--cond); font-variant-numeric: tabular-nums; }
+.stat .d { font: 12px var(--mono); color: var(--soft); font-variant-numeric: tabular-nums; }
+.meter { height: 6px; background: var(--raised); border-radius: 3px; position: relative; overflow: hidden; }
+.meter b { position: absolute; inset: 0 auto 0 0; background: var(--c); border-radius: 3px; }
+.meter::after { content: ""; position: absolute; left: 66.666%; top: 0; bottom: 0; width: 2px; background: var(--fg); opacity: .55; }
+
+.controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button, select { background: var(--panel); color: var(--fg); font: 12px var(--sans); padding: 7px 11px; }
+.seg button { border: 0; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--raised); font-weight: 600; }
+select { border: 1px solid var(--line); border-radius: 6px; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--over); outline-offset: 1px; }
+.count { font: 12px var(--mono); color: var(--dim); }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--soft); margin-left: auto; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 12px 14px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); font-family: var(--mono); }
+th { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); font-weight: 500; padding-block: 10px; }
+td { font-size: 15px; }
+.pin { position: sticky; left: 0; z-index: 2; background: var(--panel); text-align: left; font-weight: 700; }
+.wd { text-align: left; color: var(--dim); font-size: 13px; }
+th.band { color: var(--band-ink); text-align: center; font-weight: 700; font-size: 12px; background: var(--c); }
+.edge { border-left: 2px solid var(--c); }
+.tint { background: color-mix(in srgb, var(--c) 7%, transparent); }
+.dim { color: var(--dim); } .strong { font-weight: 700; }
+.u-under { color: var(--under); font-weight: 700; } .u-over { color: var(--over); font-weight: 700; } .u-ok { color: var(--ok); font-weight: 700; }
+.mark { color: var(--dim); font-weight: 400; margin-left: 6px; }
+tr.day { cursor: pointer; }
+tr.day:hover td { background-color: color-mix(in srgb, var(--fg) 4%, var(--panel)); }
+tr.day:focus-visible { outline: 2px solid var(--over); outline-offset: -2px; }
+.caret { display: inline-block; width: 14px; color: var(--dim); }
+tr.sub td { font-size: 13px; padding-block: 8px; background: var(--bg); color: var(--soft); }
+tr.sub td.name { text-align: left; white-space: normal; font-family: var(--sans); }
+tr.sub .chip { font: 700 10px var(--mono); letter-spacing: .8px; color: var(--band-ink); background: var(--c); border-radius: 3px; padding: 2px 5px; margin-right: 8px; }
+tr.sub.child td.name { padding-left: 46px; }
+tr.sub.child .chip { opacity: .75; }
+tr.sub.child td { background: color-mix(in srgb, var(--fg) 2%, var(--bg)); }
+tr.items > td { padding: 4px 14px 12px 46px; background: var(--bg); text-align: left; }
+.innerwrap { overflow-x: auto; }
+table.inner { width: auto; min-width: 760px; border: 1px solid var(--line); border-radius: 8px; }
+table.inner th, table.inner td { padding: 7px 12px; font-size: 12.5px; border-bottom: 1px solid var(--line); background: var(--panel); }
+table.inner th { font-size: 10.5px; }
+table.inner .l { text-align: left; }
+table.inner td.nm { white-space: normal; font-family: var(--sans); max-width: 560px; }
+table.inner .typ { font: 500 10px var(--mono); letter-spacing: .6px; text-transform: uppercase; color: var(--dim); margin-right: 8px; }
+table.inner tr.kid td { background: var(--bg); color: var(--soft); font-size: 12px; }
+tr.subhead td { font: 500 10.5px var(--mono); letter-spacing: 1.1px; text-transform: uppercase; color: var(--dim); background: var(--bg); padding-block: 7px; }
+.note { color: var(--dim); font-size: 11.5px; line-height: 1.65; max-width: 125ch; margin: 0; }
+.state { padding: 40px 20px; text-align: center; color: var(--dim); font-size: 14px; }
+.stale { background: var(--warn-bg); color: var(--warn-fg); border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 600; }
+@media (max-width: 600px) { th, td { padding: 10px 10px; } td { font-size: 13px; } h1 { font-size: 23px; } .legend { margin-left: 0; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <div class="head">
+    <h1 id="title">Daily budget ledger</h1>
+    <span class="sub" id="sub">Alpha Lion. Budget utilization = spend ÷ budget, by funnel.</span>
+  </div>
+
+  <div class="stale" id="stale" hidden></div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Period size">
+      <button id="g-daily" data-g="daily" aria-pressed="true">Daily</button>
+      <button id="g-weekly" data-g="weekly" aria-pressed="false">Weekly</button>
+      <button id="g-monthly" data-g="monthly" aria-pressed="false">Monthly</button>
+    </div>
+    <select id="limit" aria-label="Rows shown">
+      <option value="14">Last 14 periods</option>
+      <option value="30" selected>Last 30 periods</option>
+      <option value="60">Last 60 periods</option>
+      <option value="90">Last 90 periods</option>
+      <option value="0">All periods</option>
+    </select>
+    <span class="count" id="count"></span>
+    <div class="legend">
+      <span><i style="background:var(--under)"></i>Under 85% used</span>
+      <span><i style="background:var(--ok)"></i>85–110% used</span>
+      <span><i style="background:var(--over)"></i>Over 110% used</span>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"><tr><td class="state" colspan="16">Loading the latest budgets and spend…</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="note" id="note"></p>
+</div>
+
+<div id="lock" class="lock" hidden>
+  <form class="lockcard" id="lockForm">
+    <h2>Alpha Lion Budget Ledger</h2>
+    <p>Enter the ledger password. The numbers are stored encrypted; the password is the key that unlocks them.</p>
+    <input type="password" id="lockPass" placeholder="Password" autocomplete="current-password" autofocus>
+    <button type="submit">Unlock</button>
+    <p class="lockerr" id="lockErr" hidden>That password did not unlock the data.</p>
+  </form>
+</div>
+<style>
+.lock { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: var(--bg); padding: 16px; }
+.lock[hidden] { display: none; }
+.lockcard { width: min(380px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; display: grid; gap: 12px; }
+.lockcard h2 { margin: 0; font: 600 18px "IBM Plex Sans", sans-serif; color: var(--fg); }
+.lockcard p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.5; }
+.lockcard input { background: var(--bg); border: 1px solid var(--raised); border-radius: 6px; color: var(--fg); padding: 10px 12px; font-size: 15px; }
+.lockcard button { background: var(--fg); color: var(--bg); border: 0; border-radius: 6px; padding: 10px; font-weight: 600; cursor: pointer; }
+.lockcard .lockerr { color: var(--under); }
+</style>
+<script>
+/* Encrypted-data loader. The page code below was written for a claude.ai artifact database; this shim
+   gives it the same db.doc(...).onSnapshot / db.collection(...).orderBy().limit().onSnapshot calls,
+   served from enc/docs.bin (AES-256-GCM, key = PBKDF2 of the password) that a GitHub Action rewrites daily. */
+(() => {
+  const STORE = "albudget_pass";
+  let resolveDb; const dbReady = new Promise(r => { resolveDb = r; });
+  window.claude = { use: name => name === "db" ? dbReady : Promise.resolve(null) };
+  async function deriveKey(pass) {
+    const meta = await (await fetch("enc/salt.json", { cache: "no-store" })).json();
+    const salt = Uint8Array.from(atob(meta.salt), c => c.charCodeAt(0));
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: meta.iter || 300000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  }
+  async function load(pass) {
+    const key = await deriveKey(pass);
+    const buf = await (await fetch("enc/docs.bin", { cache: "no-store" })).arrayBuffer();
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(buf, 0, 12) }, key, new Uint8Array(buf, 12));
+    const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+    return JSON.parse(text).docs;
+  }
+  function makeDb(docs) {
+    const snapDoc = (id, data) => ({ id, exists: data != null, data: () => data });
+    const query = (name, field, dir, n) => ({
+      orderBy: (f, d) => query(name, f, d, n),
+      limit: k => query(name, field, dir, k),
+      onSnapshot(cb) {
+        let list = Object.entries(docs).filter(([k]) => k.startsWith(name + "/")).map(([k, v]) => snapDoc(k.slice(name.length + 1), v));
+        if (field) list.sort((a, b) => { const x = a.data()[field], y = b.data()[field]; return (x < y ? -1 : x > y ? 1 : 0) * (dir === "desc" ? -1 : 1); });
+        if (n) list = list.slice(0, n);
+        setTimeout(() => cb({ docs: list }), 0); return () => {};
+      }
+    });
+    return {
+      doc: path => ({ onSnapshot(cb) { setTimeout(() => cb(snapDoc(path.split("/").pop(), docs[path] ?? null)), 0); return () => {}; } }),
+      collection: name => query(name)
+    };
+  }
+  const lock = document.getElementById("lock"), form = document.getElementById("lockForm"), input = document.getElementById("lockPass"), err = document.getElementById("lockErr");
+  async function tryPass(pass, remember) {
+    const docs = await load(pass);
+    if (remember) { try { localStorage.setItem(STORE, pass); } catch {} }
+    lock.hidden = true; resolveDb(makeDb(docs));
+  }
+  form.addEventListener("submit", async e => {
+    e.preventDefault(); err.hidden = true;
+    try { await tryPass(input.value, true); } catch { err.hidden = false; input.select(); }
+  });
+  let saved = null; try { saved = localStorage.getItem(STORE); } catch {}
+  (saved ? tryPass(saved, false) : Promise.reject()).catch(() => { try { localStorage.removeItem(STORE); } catch {} lock.hidden = false; input.focus(); });
+})();
+</script>
+<script>
+const LABEL = { t: "Total", OTH: "Other" };
+const NVP_BUCKETS = [["b60", "NVP 60%+"], ["b50", "NVP 50–59%"], ["b40", "NVP 40–49%"], ["b0", "NVP <40%"], ["none", "No visit data"]];
+const FUNNELS = ["B2O","SHT","DEL"];
+const BRAND = "Alpha Lion";
+const PERIOD_HEAD = { daily: "Date", weekly: "Week of", monthly: "Month" };
+const TITLE = { daily: "Daily budget ledger", weekly: "Weekly budget ledger", monthly: "Monthly budget ledger" };
+const LOW = 85, HIGH = 110;
+const state = { gran: "daily", limit: 30, docs: {}, meta: null, detail: null, open: new Set(), openBofu: new Set(), openItems: new Set(), loaded: false, failed: null };
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// Each stored document names its own column order in `fields`, so a refresh can add a column
+// without breaking a page that is already open.
+const reader = fields => { const ix = {}; (fields || []).forEach((f, i) => { ix[f] = i; }); return arr => { const o = {}; for (const f in ix) o[f] = (arr && arr[ix[f]]) || 0; return o; }; };
+const money = v => "$" + Math.round(v).toLocaleString("en-US");
+const util = (spend, budget) => (budget > 0 ? spend / budget * 100 : null);
+const pct = v => (v == null ? "—" : v.toFixed(0) + "%");
+const utilCls = v => (v == null ? "dim" : v < LOW ? "u-under" : v > HIGH ? "u-over" : "u-ok");
+const utilVar = v => (v == null ? "--raised" : v < LOW ? "--under" : v > HIGH ? "--over" : "--ok");
+const weekday = d => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+
+// Columns: Total first (the key numbers), then one band per funnel. "Other" appears only when it has spend.
+function columns(rows) {
+  const funnels = funnelList();
+  const hasOther = rows.some(r => r.OTH && r.OTH[0] > 0);
+  return ["t", ...funnels, ...(hasOther ? ["OTH"] : [])];
+}
+const funnelList = () => (state.meta && state.meta.funnels) || FUNNELS;
+const colorOf = k => (k === "t" ? "var(--tot)" : k === "OTH" ? "var(--OTH)" : `var(--f${(funnelList().indexOf(k) % 6) + 1})`);
+const nameOf = k => LABEL[k] || k;
+
+// NC RoAS column: daily view only, when the drop-down data carries revenue. It reads the same rolling
+// window as the NVP split (that day and the days before it) over that day's switched-on budgets.
+const withRoas = () => state.gran === "daily" && !!(state.detail && state.detail.kind === "nvp" && Object.values(state.detail.days || {}).some(d => d.nc_roas));
+// What the drop-down reads: one wording for "the previous day" (Josh's setup) and a range otherwise.
+const basisText = x => { const d = state.detail || {}, f = s => new Date(s + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return (d.window_days === 1 && d.offset_days === 1) ? `based on yesterday (${f(x.to)})` : x.from === x.to ? `based on ${f(x.to)}` : `based on ${f(x.from)}–${f(x.to)}`; };
+const roasTitle = () => `NC RoAS = new-customer revenue ÷ spend (Moby, full impact attribution, 7-day click), based on ${state.detail && state.detail.window_days === 1 && state.detail.offset_days === 1 ? "the previous day's data" : "the drop-down's window"}, not the day itself.`;
+const dayRoasTitle = () => `NC RoAS for that day: that funnel's new-customer revenue ÷ its spend that day (Moby, full impact attribution, 7-day click). The day still running shows — until the next morning's refresh; after that the figure stays as it was read then.`;
+const roas = o => (o && o.spend > 0 && o.nc_revenue != null ? (o.nc_revenue / o.spend).toFixed(2) : "—");
+function renderHead(cols) {
+  const thead = $("thead"); thead.replaceChildren();
+  const r1 = el("tr"), r2 = el("tr");
+  const p = el("th", "pin", PERIOD_HEAD[state.gran]); p.rowSpan = 2; p.style.verticalAlign = "middle"; r1.append(p);
+  const w = el("th", "wd", state.gran === "daily" ? "Day" : "Days"); w.rowSpan = 2; w.style.verticalAlign = "middle"; r1.append(w);
+  for (const k of cols) {
+    const heads = ["Spend", "Budget", "Used", ...(withRoas() ? ["NC RoAS"] : [])];
+    const th = el("th", "band", nameOf(k)); th.colSpan = heads.length; th.style.setProperty("--c", colorOf(k)); r1.append(th);
+    heads.forEach((h, i) => { const c = el("th", (k === "t" ? "" : "tint") + (i ? "" : " edge"), h); c.style.setProperty("--c", colorOf(k)); if (i === 3) c.title = dayRoasTitle(); r2.append(c); });
+  }
+  thead.append(r1, r2);
+}
+
+function cell(text, cls, k, title) {
+  const td = el("td", cls, text);
+  if (k) td.style.setProperty("--c", colorOf(k));
+  if (title) td.title = title;
+  return td;
+}
+
+function renderStrip() {
+  const strip = $("strip"); strip.replaceChildren();
+  const doc = state.docs.daily;
+  if (!doc || !doc.rows || !doc.rows.length) return;
+  const read = reader(doc.fields);
+  const full = doc.rows.filter(r => !r.live);
+  const last = full[0]; if (!last) return;
+  const week = full.slice(0, 7);
+  for (const k of columns(doc.rows).filter(k => k !== "OTH")) {
+    const x = read(last[k]), u = util(x.spend, x.budget);
+    const w = week.reduce((a, r) => { const y = read(r[k]); a.s += y.spend; a.b += y.budget; return a; }, { s: 0, b: 0 });
+    const box = el("div", "stat"); box.style.setProperty("--c", colorOf(k));
+    box.append(el("div", "k", `${nameOf(k)} · ${last.p}`));
+    const v = el("div", "v " + utilCls(u), pct(u)); box.append(v);
+    const meter = el("div", "meter"); const fill = el("b"); fill.style.width = Math.min(100, (u || 0) / 150 * 100) + "%"; fill.style.background = `var(${utilVar(u)})`; meter.append(fill); meter.title = "Bar runs 0–150%. The line marks 100% of budget."; box.append(meter);
+    box.append(el("div", "d", `${money(x.spend)} spent of ${money(x.budget)}`));
+    box.append(el("div", "d", `Last ${week.length} full days: ${pct(util(w.s, w.b))} used`));
+    strip.append(box);
+  }
+}
+
+const m0 = () => state.meta && state.meta.ledger_start;
+function render() {
+  $("title").textContent = TITLE[state.gran];
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.g === state.gran)));
+  renderNote(); renderStrip();
+  const tbody = $("tbody"); tbody.replaceChildren();
+  const doc = state.docs[state.gran];
+  if (!doc || !doc.rows || !doc.rows.length) {
+    renderHead(["t", ...funnelList()]);
+    const msg = state.failed ? state.failed
+      : !state.loaded ? "Loading the latest budgets and spend…"
+      : "No numbers stored yet. They appear here after the next refresh.";
+    const tr = el("tr"); const td = el("td", "state", msg); td.colSpan = 16; tr.append(td); tbody.append(tr);
+    return;
+  }
+  const rows = state.limit ? doc.rows.slice(0, state.limit) : doc.rows;
+  const unit = { daily: "days", weekly: "weeks", monthly: "months" }[state.gran];
+  $("count").textContent = `Showing ${rows.length} of ${doc.rows.length} ${unit} on record` + (m0() ? ` (ledger starts ${m0()})` : "");
+  const cols = columns(rows), read = reader(doc.fields);
+  renderHead(cols);
+  const span = 2 + cols.length * (withRoas() ? 4 : 3);
+  for (const r of rows) {
+    const tr = el("tr");
+    const days = state.detail && state.detail.days;
+    const canOpen = state.gran === "daily" && state.detail && state.detail.kind === "nvp" && days && days[r.p];
+    const p = el("td", "pin");
+    if (canOpen) {
+      tr.className = "day"; tr.tabIndex = 0; tr.setAttribute("role", "button"); tr.setAttribute("aria-expanded", String(state.open.has(r.p)));
+      p.append(el("span", "caret", state.open.has(r.p) ? "▾" : "▸"));
+      const toggle = () => { state.open.has(r.p) ? state.open.delete(r.p) : state.open.add(r.p); render(); };
+      tr.addEventListener("click", toggle);
+      tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    }
+    p.append(r.p);
+    if (r.live) { const m = el("span", "mark", "◔"); m.title = "Today, still running: budget is what is switched on right now; spend is partial, so the % used will keep rising."; p.append(m); }
+    if (r.est > 0.02) { const m = el("span", "mark", "≈"); m.title = `About ${(r.est * 100).toFixed(0)}% of this budget uses today's budget values because no history was on record for those campaigns.`; p.append(m); }
+    tr.append(p, el("td", "wd", state.gran === "daily" ? weekday(r.p) : String(r.days || "")));
+    for (const k of cols) {
+      const x = read(r[k]), u = util(x.spend, x.budget), tint = k === "t" ? "" : "tint ";
+      tr.append(
+        cell(x.spend > 0 || x.budget > 0 ? money(x.spend) : "—", tint + "edge" + (k === "t" ? " strong" : "") + (x.spend > 0 || x.budget > 0 ? "" : " dim"), k),
+        cell(x.budget > 0 ? money(x.budget) : "—", tint + (k === "t" ? "strong" : ""), k, `${x.holders} budgets counted (campaign budgets + ad set budgets switched on)`),
+        cell(pct(u), tint + (r.live ? "dim" : utilCls(u)), k, r.live ? "Today is still running" : null),
+      );
+      if (withRoas()) {
+        // Day row = a snapshot of that day alone (the drop-down holds the rolling-window trend).
+        const dd = days && days[r.p], v = dd && dd.day && dd.day[k];
+        const agg = v ? { spend: v[0], nc_revenue: v[1] } : null;
+        tr.append(cell(roas(agg), tint + (agg && agg.spend > 0 ? (k === "t" ? "strong" : "") : "dim"), k, agg ? dayRoasTitle() : r.live ? "Fills in at the next morning's refresh" : "No revenue data for this day"));
+      }
+    }
+    tbody.append(tr);
+    if (canOpen && state.open.has(r.p)) {
+      // Drop-down: that day's switched-on budgets, grouped by the New Visitor % each budget earned over
+      // a rolling window (that day and the days before it), split by funnel in the same columns as the row.
+      const x = days[r.p], dread = reader(state.detail.fields);
+      const fmtDay = d => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+      const h = el("tr", "subhead");
+      const h1 = el("td", "pin", `NVP % & NC RoAS · ${basisText(x)}` + (x.days_with_data < x.window_days ? ` (${x.days_with_data} of ${x.window_days} days)` : ""));
+      h1.colSpan = 2; h1.title = "Each switched-on budget gets one New Visitor % blended from all its creatives: new ÷ (new + returning) visitors across its ad set (campaign-level budget: its whole campaign) on the previous day. A budget launched that day is scored on that day instead. Click a bucket to split it into BOFU and non-BOFU budgets.";
+      h.append(h1);
+      for (const k of cols) ["Budgets", "Budget", "% of budget", ...(withRoas() ? ["NC RoAS"] : [])].forEach((t, i) => { const c = el("td", i ? null : "edge", t); c.style.setProperty("--c", colorOf(k)); if (i === 3) c.title = roasTitle(); h.append(c); });
+      tbody.append(h);
+      const showNone = cols.some(k => x[k] && dread(x[k].none).holders > 0);
+      const subRow = (label, colorVar, key, opts = {}) => {
+        const s = el("tr", "sub" + (opts.child ? " child" : ""));
+        const n = el("td", "name"); n.colSpan = 2;
+        if (opts.toggle) {
+          s.classList.add("day"); s.tabIndex = 0; s.setAttribute("role", "button"); s.setAttribute("aria-expanded", String(opts.open));
+          n.append(el("span", "caret", opts.open ? "▾" : "▸"));
+          const go = e => { e.stopPropagation(); opts.toggle(); };
+          s.addEventListener("click", go);
+          s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(e); } });
+        }
+        const dot = el("span", "chip", label); dot.style.setProperty("--c", colorVar); n.append(dot);
+        if (opts.note) n.append(el("span", "dim", opts.note));
+        s.append(n);
+        for (const k of cols) {
+          const o = dread(x[k] && x[k][key]), tot = read(r[k]); // row arrays use the daily doc's fields, not the drop-down's
+          const nvp = o.visitors > 0 ? `${(o.new_visitors / o.visitors * 100).toFixed(0)}% new visitors across these budgets` : "No visit data";
+          s.append(
+            cell(o.holders ? String(o.holders) : "—", "edge" + (o.holders ? "" : " dim"), k),
+            cell(o.budget > 0 ? money(o.budget) : "—", o.budget > 0 ? "" : "dim", k, nvp),
+            cell(o.budget > 0 && tot.budget > 0 ? pct(o.budget / tot.budget * 100) : "—", o.budget > 0 ? "strong" : "dim", k),
+          );
+          if (withRoas()) s.append(cell(x.nc_roas && o.holders ? roas(o) : "—", o.holders && x.nc_roas ? "" : "dim", k, roasTitle()));
+        }
+        tbody.append(s);
+      };
+      const m = state.detail.bofu_match || "BOFU";
+      for (const [b, label] of NVP_BUCKETS) {
+        if (b === "none" && !showNone) continue;
+        const key = r.p + "|" + b, hasSplit = !!(x.t && x.t[b + "_bofu"]);
+        if (!hasSplit) { subRow(label, `var(--${b})`, b); continue; }
+        const open = state.openBofu.has(key);
+        subRow(label, `var(--${b})`, b, { open, toggle: () => { open ? state.openBofu.delete(key) : state.openBofu.add(key); render(); } });
+        if (open) {
+          for (const [suffix, lbl, isBofu, note] of [["_bofu", state.detail.bofu_label || m, 1, ` name contains "${m}"`], ["_rest", state.detail.bofu_label_rest || "Non-" + m, 0, ""]]) {
+            const ikey = key + suffix, list = itemsFor(r.p, b, isBofu), iopen = state.openItems.has(ikey);
+            subRow(lbl, `var(--${b})`, b + suffix, { child: true, note: note + (list ? ` · ${list.length} budget${list.length === 1 ? "" : "s"}` : ""),
+              ...(list && list.length ? { open: iopen, toggle: () => { iopen ? state.openItems.delete(ikey) : state.openItems.add(ikey); render(); } } : {}) });
+            if (iopen && list) tbody.append(itemsTable(list, span));
+          }
+        }
+      }
+      const sd = x.t && x.t.same_day;
+      if (sd && sd[1]) { const s = el("tr", "sub child"); const n = el("td", "name dim"); n.colSpan = span; n.textContent = `${sd[1]} budget${sd[1] > 1 ? "s" : ""} (${money(sd[0])}) launched this day had no previous-day visits and ${sd[1] > 1 ? "are" : "is"} scored on this day instead.`; s.append(n); tbody.append(s); }
+    }
+  }
+}
+
+// Level 3: the budgets behind a BOFU / non-BOFU row, all funnels, biggest budget first. A campaign-level
+// budget lists its ad sets underneath (each with its own NVP) so a blended score can be traced.
+const ITEM = { funnel: 0, bucket: 1, bofu: 2, type: 3, name: 4, budget: 5, nvp: 6, spend: 7, ncr: 8, sameDay: 9, kids: 10 };
+function itemsFor(date, bucket, bofu) {
+  const doc = chunks && chunks.items.get("items-" + date); if (!doc) return null;
+  return doc.items.filter(it => it[ITEM.bucket] === bucket && it[ITEM.bofu] === bofu);
+}
+function itemsTable(list, span) {
+  const tr = el("tr", "items"); const td = el("td"); td.colSpan = span; tr.append(td);
+  const t = el("table", "inner"); const head = el("tr");
+  ["Funnel", "Campaign / ad set", "Budget", "NVP", "Spend", "NC RoAS"].forEach((h, i) => head.append(el("th", i < 2 ? "l" : null, h)));
+  t.append(head);
+  const pctTxt = v => (v == null ? "—" : v.toFixed(1) + "%");
+  for (const it of list) {
+    const r = el("tr");
+    const chip = el("span", "chip", it[ITEM.funnel] === "OTH" ? "OTHER" : it[ITEM.funnel]); chip.style.setProperty("--c", colorOf(it[ITEM.funnel]));
+    const f = el("td", "l"); f.append(chip); r.append(f);
+    const n = el("td", "l nm"); n.append(el("span", "typ", it[ITEM.type] === "CBO" ? "Campaign budget" : "Ad set budget"), document.createTextNode(it[ITEM.name]));
+    if (it[ITEM.sameDay]) n.append(el("span", "dim", " · scored on this day (new)"));
+    r.append(n, el("td", null, money(it[ITEM.budget])), el("td", "strong", pctTxt(it[ITEM.nvp])), el("td", null, money(it[ITEM.spend])),
+      el("td", null, it[ITEM.spend] > 0 ? (it[ITEM.ncr] / it[ITEM.spend]).toFixed(2) : "—"));
+    t.append(r);
+    for (const k of it[ITEM.kids] || []) {
+      const kr = el("tr", "kid"); kr.append(el("td"));
+      kr.append(el("td", "l nm", "↳ " + k[0]), el("td", "dim", "—"), el("td", null, pctTxt(k[1])), el("td", null, money(k[2])), el("td", null, k[2] > 0 ? (k[3] / k[2]).toFixed(2) : "—"));
+      t.append(kr);
+    }
+  }
+  const wrap = el("div", "innerwrap"); wrap.append(t); td.append(wrap);
+  return tr;
+}
+
+function renderNote() {
+  const m = state.meta || {};
+  const when = m.generated_at ? new Date(m.generated_at) : null;
+  $("sub").textContent = `${m.brand || BRAND} · ${m.channel === "meta" || !m.channel ? "Meta" : m.channel}, all ad accounts, via Moby. Budget utilization = spend ÷ budget. Days run on ${m.timezone === "America/Los_Angeles" ? "Pacific time" : (m.timezone || "account time")}.`;
+  const other = m.other_funnels && m.other_funnels.length ? ` Other = ${m.other_funnels.join(", ")}.` : "";
+  $("note").textContent =
+    `How a day's budget is counted: the daily budgets of the campaigns and ad sets that are switched ON. Anything paused is left out, even if it spent earlier that day. ` +
+    `Today's row is what is on right now. Past days show what was still on when the day ended` +
+    (m.first_snapshot ? `: from ${m.first_snapshot} that is recorded each night; earlier days are rebuilt (an ad set counts as on if it spent that day and the next, at the budget it ended the day with, from Meta's budget change history). ` : `, rebuilt from spend and Meta's budget change history (an ad set counts as on if it spent that day and the next, at the budget it ended the day with). `) +
+    `${m.note ? m.note + " " : ""}${other.trim()} Total = every funnel. ` +
+    `Spend still includes ad sets paused during the day, and Meta may spend up to about 25% over a daily budget, so above 100% is normal. ` +
+    `◔ marks today (spend still coming in). ≈ marks a day where part of the budget is an estimate. Click a day to see that day's switched-on budgets split by New Visitor %: each budget gets one NVP blended from all its creatives (new ÷ all visitors across its ad set, or its whole campaign for a campaign-level budget); budgets launched that day are scored on that day; the split and its NC RoAS are ${state.detail && state.detail.window_days === 1 && state.detail.offset_days === 1 ? "based on the previous day's data" : "based on the drop-down's stated window"}, so a day's buckets do not move while it runs. NC RoAS (Moby, full impact attribution, 7-day click) = new-customer revenue ÷ spend; on a day's row it is that day, left blank until the next morning's refresh. Each bucket opens into BOFU / non-BOFU, and each of those into the budgets themselves (a campaign-level budget lists its ad sets). BOFU = ad set or campaign name contains "${(state.detail && state.detail.bofu_match) || "BOFU"}". ` +
+    (when ? `Data refreshed ${when.toLocaleString()}.` : "");
+  const stale = $("stale");
+  if (when && Date.now() - when.getTime() > 36 * 36e5) {
+    stale.textContent = `These numbers were last refreshed ${when.toLocaleDateString()} and may be out of date. Days missed by the refresh use estimated budgets.`;
+    stale.hidden = false;
+  } else if (!(chunks && chunks.bad.size)) stale.hidden = true;
+}
+
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => { state.gran = b.dataset.g; render(); }));
+$("limit").addEventListener("change", e => { state.limit = Number(e.target.value); render(); });
+
+render();
+
+// Data lives in small documents (see build_ledger.mjs): budget/meta, ledger_daily/daily-YYYY-MM (one
+// month of daily rows each) and ledger_nvp/nvp-YYYY-MM-DD (one day's NVP split each). Weekly and monthly
+// rows are rolled up here from the daily rows. Each document carries `check` = the sum of its numbers;
+// a mismatch means it was garbled on the way in, and the page says so instead of showing bad numbers.
+const sumNumbers = o => { let t = 0; const walk = v => { if (typeof v === "number" && Number.isFinite(v)) t += v; else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") Object.values(v).forEach(walk); }; walk(o); return Math.round(t * 100) / 100; };
+const intact = d => { if (!d || typeof d.check !== "number") return true; const { check, ...rest } = d; return Math.abs(sumNumbers(rest) - check) < 0.011; };
+var chunks = { daily: new Map(), nvp: new Map(), items: new Map(), bad: new Set() }; // var: renderNote may run before this line
+const mondayOf = d => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+function rollup(rows, keyOf, keys) {
+  const m = new Map();
+  for (const r of rows) {
+    const k = keyOf(r.p);
+    if (!m.has(k)) { const o = { p: k, days: 0, est: 0 }; for (const key of keys) o[key] = [0, 0, 0]; m.set(k, o); }
+    const o = m.get(k); o.days++; o.est = Math.max(o.est, r.est || 0);
+    for (const key of keys) for (let i = 0; i < 3; i++) o[key][i] = Math.round((o[key][i] + ((r[key] || [])[i] || 0)) * 100) / 100;
+  }
+  return [...m.values()].sort((a, b) => b.p.localeCompare(a.p));
+}
+function assemble() {
+  if (!chunks.daily.size) return;
+  const m = state.meta || {};
+  const DETAIL_DEFAULT = { kind: "nvp", fields: ["budget", "holders", "new_visitors", "visitors", "spend", "nc_revenue"], attribution: "full_impact · 7_day_click", bofu_match: "BOFU", window_days: 8 };
+  const rows = [...chunks.daily.values()].flatMap(c => c.rows || []).sort((a, b) => b.p.localeCompare(a.p));
+  const keep = m.keep || {}, fields = m.daily_fields || ["spend", "budget", "holders"];
+  const keys = ["t", ...(m.funnels || []), "OTH"];
+  state.docs.daily = { fields, rows: rows.slice(0, keep.daily || 120) };
+  state.docs.weekly = { fields, rows: rollup(rows, mondayOf, keys).slice(0, keep.weekly || 26) };
+  state.docs.monthly = { fields, rows: rollup(rows, d => d.slice(0, 7), keys).slice(0, keep.monthly || 12) };
+  const days = {}; for (const x of chunks.nvp.values()) days[x.date] = x;
+  state.detail = { ...DETAIL_DEFAULT, ...(m.detail || {}), days };
+  const stale = $("stale");
+  if (chunks.bad.size) { stale.textContent = `Part of the data did not arrive intact (${[...chunks.bad].join(", ")}). Those numbers are hidden until the next refresh rewrites them.`; stale.hidden = false; }
+}
+
+(async () => {
+  const db = await window.claude?.use?.("db");
+  if (!db) { state.loaded = true; state.failed = "Enter the ledger password to see the numbers."; render(); return; }
+  let pending = 3;
+  const done = () => { if (--pending <= 0) state.loaded = true; };
+  const fail = err => { state.failed = "Could not load the numbers (" + (err && err.code || "error") + ")."; render(); };
+  const take = (map, label) => snap => {
+    map.clear();
+    for (const d of snap.docs) { const x = d.data(); if (!x) continue; if (intact(x)) { map.set(d.id, x); chunks.bad.delete(label + " " + d.id.replace(/^\w+-/, "")); } else chunks.bad.add(label + " " + d.id.replace(/^\w+-/, "")); }
+  };
+  let first = { meta: true, daily: true, nvp: true };
+  db.doc("budget/meta").onSnapshot(snap => {
+    state.meta = snap.exists ? snap.data() : null;
+    if (first.meta) { first.meta = false; done(); }
+    if (!state._subscribed) { // subscribe once, whatever the meta says, so an older-format meta write cannot blank the page
+      state._subscribed = true;
+      db.collection("ledger_daily").onSnapshot(snap => { take(chunks.daily, "days")(snap); if (first.daily) { first.daily = false; done(); } assemble(); render(); }, fail);
+      db.collection("ledger_nvp").orderBy("date", "desc").limit((state.meta && state.meta.keep && state.meta.keep.detail_days) || 21)
+        .onSnapshot(snap => { take(chunks.nvp, "NVP for")(snap); if (first.nvp) { first.nvp = false; done(); } assemble(); render(); }, fail);
+      db.collection("ledger_items").orderBy("date", "desc").limit((state.meta && state.meta.keep && state.meta.keep.detail_days) || 21)
+        .onSnapshot(snap => { take(chunks.items, "budget list for")(snap); render(); }, fail);
+    }
+    assemble(); render();
+  }, err => { if (first.meta) { first.meta = false; done(); } fail(err); });
+})();
+</script>
+</body>
+</html>
